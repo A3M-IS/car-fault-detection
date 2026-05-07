@@ -1,9 +1,12 @@
 import os
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Paths
-DATASET_DIR = "data"
-MODELS_DIR = "models"
-RESULTS_DIR = "results"
+DATASET_DIR = os.path.join(BASE_DIR, "data")
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+RESULTS_DIR = os.path.join(BASE_DIR, "results")
+FEATURE_CACHE_DIR = os.path.join(RESULTS_DIR, "feature_cache")
 
 # Audio Preprocessing
 SAMPLE_RATE = 16000
@@ -19,35 +22,43 @@ TEST_SIZE = 0.20
 VAL_SIZE = 0.0  # Optional, can split from TRAIN_SIZE if needed
 
 # Training Hyperparameters
-BATCH_SIZE = 32
-EPOCHS = 80  # Reduced to allow early stopping to trigger (was 100)
-LEARNING_RATE = 3e-4 # Slightly lower for better convergence
-WEIGHT_DECAY = 1e-2 # Increased to 1e-2 from 5e-3 for stronger L2 regularization
-LABEL_SMOOTHING = 0.1 # Increased from 0.05
+BATCH_SIZE = 48
+EPOCHS = 60
+LEARNING_RATE = 3e-4
+WEIGHT_DECAY = 5e-3
+LABEL_SMOOTHING = 0.05
+USE_CLASS_WEIGHTED_LOSS = False
 
 # Early Stopping and Scheduler
-EARLY_STOPPING_PATIENCE = 20
-SCHEDULER_PATIENCE = 7
+EARLY_STOPPING_PATIENCE = 10
+SCHEDULER_PATIENCE = 4
 LR_FACTOR = 0.5
 
 # CRNN Architecture
-LSTM_HIDDEN_SIZE = 64  # Reduced from 128 to constrain model capacity and prevent overfitting
+LSTM_HIDDEN_SIZE = 64
 LSTM_LAYERS = 2
-DROPOUT = 0.5 # Increased from 0.3 to reduce overfitting
+DROPOUT = 0.5
 
 # Data Augmentation
 USE_AUGMENTATION = True
 USE_MIXUP = True
 USE_BALANCED_SAMPLING = True
-NOISE_FACTOR = 0.015 # Increased from 0.01 for stronger noise augmentation
-TIME_SHIFT_MAX = 0.3  # Increased from 0.1 for more aggressive shifting
-TIME_MASK_PARAM = 8   # Increased from 4 (~25% of time masked)
-FREQ_MASK_PARAM = 20  # Increased from 10 (~16% of frequency masked)
-MIXUP_ALPHA = 0.3     # Increased from 0.2 for stronger mixup effect
+NOISE_FACTOR = 0.01
+TIME_SHIFT_MAX = 0.15
+TIME_MASK_PARAM = 6
+FREQ_MASK_PARAM = 14
+MIXUP_ALPHA = 0.2
+USE_PITCH_SHIFT_AUG = False
+USE_TIME_STRETCH_AUG = False
+
+# Runtime speed options
+NUM_WORKERS = max(1, min(4, (os.cpu_count() or 2) // 2))
+ENABLE_FEATURE_CACHE = True
 
 # Ensure directories exist
 os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(RESULTS_DIR, exist_ok=True)
+os.makedirs(FEATURE_CACHE_DIR, exist_ok=True)
 
 # Fault mapping (Grouped to reduce acoustic overlap and include new data)
 FAULT_MAPPING = {

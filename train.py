@@ -84,18 +84,30 @@ def run_training(train_loader, val_loader, num_classes, class_weights=None):
     
     net = model.build_model(num_classes).to(device)
     
-    # Weighted CrossEntropyLoss with Label Smoothing
+    # Avoid applying two imbalance corrections simultaneously.
+    use_loss_weights = (
+        class_weights is not None
+        and config.USE_CLASS_WEIGHTED_LOSS
+        and not config.USE_BALANCED_SAMPLING
+    )
+
+    # CrossEntropyLoss with optional class weights and label smoothing
     criterion = nn.CrossEntropyLoss(
-        weight=class_weights.to(device) if class_weights is not None else None,
+        weight=class_weights.to(device) if use_loss_weights else None,
         label_smoothing=config.LABEL_SMOOTHING
+    )
+    print(
+        "Imbalance strategy: "
+        f"balanced_sampling={config.USE_BALANCED_SAMPLING}, "
+        f"class_weighted_loss={use_loss_weights}"
     )
     
     # AdamW Optimizer
     optimizer = optim.AdamW(net.parameters(), lr=config.LEARNING_RATE, weight_decay=config.WEIGHT_DECAY)
     
-    # Learning Rate Scheduler
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=config.LR_FACTOR, patience=config.SCHEDULER_PATIENCE
+    # Cosine Annealing Scheduler with Warm Restarts
+    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer, T_0=10, T_mult=2, eta_min=1e-6
     )
     
     history = {
@@ -112,7 +124,7 @@ def run_training(train_loader, val_loader, num_classes, class_weights=None):
         val_loss, val_acc = validate(net, val_loader, criterion, device)
         
         # Step the scheduler
-        scheduler.step(val_loss)
+        scheduler.step()
         
         history['train_loss'].append(train_loss)
         history['train_acc'].append(train_acc)

@@ -1,6 +1,8 @@
 import librosa
 import numpy as np
 import config
+import hashlib
+import os
 
 def add_noise(y, noise_factor=0.005):
     noise = np.random.randn(len(y))
@@ -37,12 +39,24 @@ def apply_spec_augment(mel_spec, time_mask_param=6, freq_mask_param=15):
         
     return mel_spec
 
+
+def _cache_file_path(file_path):
+    key = f"{file_path}|{config.SAMPLE_RATE}|{config.N_MELS}|{config.N_FFT}|{config.HOP_LENGTH}|{config.IMG_SIZE[1]}"
+    digest = hashlib.md5(key.encode("utf-8")).hexdigest()
+    return os.path.join(config.FEATURE_CACHE_DIR, f"{digest}.npy")
+
 def extract_mel_spectrogram(file_path, augment=False):
     """
     Load audio file, preprocess it, and extract Mel Spectrogram.
     Optional: Apply audio-level and spectrogram-level augmentation.
     """
     try:
+        cache_path = None
+        if config.ENABLE_FEATURE_CACHE and not augment:
+            cache_path = _cache_file_path(file_path)
+            if os.path.exists(cache_path):
+                return np.load(cache_path)
+
         # Load audio
         y, sr = librosa.load(file_path, sr=config.SAMPLE_RATE, mono=True)
         
@@ -52,11 +66,11 @@ def extract_mel_spectrogram(file_path, augment=False):
                 y = add_noise(y, config.NOISE_FACTOR)
             if np.random.random() > 0.5:
                 y = time_shift(y, config.TIME_SHIFT_MAX)
-            if np.random.random() > 0.4:
+            if config.USE_PITCH_SHIFT_AUG and np.random.random() > 0.4:
                 # Pitch shift +/- 2 semitones
                 steps = np.random.uniform(-2, 2)
                 y = pitch_shift(y, config.SAMPLE_RATE, steps)
-            if np.random.random() > 0.4:
+            if config.USE_TIME_STRETCH_AUG and np.random.random() > 0.4:
                 # Time stretch 0.9x to 1.1x
                 rate = np.random.uniform(0.9, 1.1)
                 y = time_stretch(y, rate)
@@ -98,6 +112,9 @@ def extract_mel_spectrogram(file_path, augment=False):
         # Normalize: mean=0, std=1 (Standardization)
         mel_spec_db = (mel_spec_db - mel_spec_db.mean()) / (mel_spec_db.std() + 1e-6)
         
+        if cache_path is not None:
+            np.save(cache_path, mel_spec_db)
+
         return mel_spec_db
     except Exception as e:
         print(f"Error processing {file_path}: {e}")

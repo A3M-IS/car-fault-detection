@@ -1,47 +1,69 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import io
 import os
 import torch
 from inference import EngineFaultDetector
 import config
 
-app = FastAPI(title="Car Engine Fault Detection API", version="1.0.0")
+detector = None
+model_path = os.path.join(config.MODELS_DIR, "best_model.pth")
+le_path = os.path.join(config.MODELS_DIR, "label_encoder.joblib")
 
-# Enable CORS for Next.js frontend
+
+def _load_detector():
+    global detector
+    if not os.path.exists(model_path) or not os.path.exists(le_path):
+        print(f"⚠️ Model files not found at {model_path} or {le_path}")
+        print("Please run: python main.py")
+        detector = None
+        return
+
+    try:
+        detector = EngineFaultDetector(model_path, le_path)
+        print("✅ Model loaded successfully")
+    except Exception as e:
+        print(f"❌ Error loading model: {e}")
+        detector = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _load_detector()
+
+    yield
+
+
+app = FastAPI(title="Car Engine Fault Detection API", version="1.0.0", lifespan=lifespan)
+
+
+def ensure_latest_detector():
+    global detector
+    if detector is None:
+        _load_detector()
+        return
+
+    current_mtime = os.path.getmtime(model_path) if os.path.exists(model_path) else None
+    if current_mtime is not None and getattr(detector, "model_mtime", None) != current_mtime:
+        print("🔄 Model checkpoint changed, reloading latest weights...")
+        _load_detector()
+
+# Production CORS Configuration
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Global detector instance
-detector = None
-
-@app.on_event("startup")
-async def load_model():
-    """Load model on startup"""
-    global detector
-    model_path = os.path.join(config.MODELS_DIR, "best_model.pth")
-    le_path = os.path.join(config.MODELS_DIR, "label_encoder.joblib")
-    
-    if not os.path.exists(model_path) or not os.path.exists(le_path):
-        print(f"⚠️ Model files not found at {model_path} or {le_path}")
-        print("Please run: python main.py")
-        detector = None
-    else:
-        try:
-            detector = EngineFaultDetector(model_path, le_path)
-            print("✅ Model loaded successfully")
-        except Exception as e:
-            print(f"❌ Error loading model: {e}")
-            detector = None
-
 @app.get("/")
 async def root():
     """API Health check"""
+    ensure_latest_detector()
     model_status = "loaded" if detector else "not loaded"
     return {
         "status": "running",
@@ -61,6 +83,8 @@ async def predict(file: UploadFile = File(...)):
     - location: Engine component location
     - confidence: Model confidence score
     """
+    ensure_latest_detector()
+
     if detector is None:
         raise HTTPException(
             status_code=503,
@@ -111,6 +135,7 @@ async def predict(file: UploadFile = File(...)):
 @app.get("/classes")
 async def get_classes():
     """Get list of fault classes the model can detect"""
+    ensure_latest_detector()
     if detector is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     

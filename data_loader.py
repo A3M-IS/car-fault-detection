@@ -104,13 +104,33 @@ def get_dataloaders():
     val_ds = EngineAudioDataset(val_files, val_labels, augment=False)
     test_ds = EngineAudioDataset(test_files, test_labels, augment=False)
     
+    use_workers = max(0, int(config.NUM_WORKERS))
+    persistent = use_workers > 0
+
     train_loader = DataLoader(
         train_ds,
         batch_size=config.BATCH_SIZE,
         shuffle=False if sampler is not None else True,
         sampler=sampler,
+        num_workers=use_workers,
+        pin_memory=torch.cuda.is_available(),
+        persistent_workers=persistent,
     )
-    val_loader = DataLoader(val_ds, batch_size=config.BATCH_SIZE, shuffle=False)
-    test_loader = DataLoader(test_ds, batch_size=config.BATCH_SIZE, shuffle=False)
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=config.BATCH_SIZE,
+        shuffle=False,
+        num_workers=use_workers,
+        pin_memory=torch.cuda.is_available(),
+        persistent_workers=persistent,
+    )
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=config.BATCH_SIZE,
+        shuffle=False,
+        num_workers=use_workers,
+        pin_memory=torch.cuda.is_available(),
+        persistent_workers=persistent,
+    )
     
     return train_loader, val_loader, test_loader, classes, class_weights

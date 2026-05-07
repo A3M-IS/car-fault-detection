@@ -3,14 +3,33 @@ import torch.nn as nn
 import torch.nn.functional as F
 import config
 
+class SEBlock(nn.Module):
+    """Squeeze-and-Excitation block for channel-wise attention."""
+    def __init__(self, channels, reduction=16):
+        super(SEBlock, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channels, channels // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channels // reduction, channels, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y.expand_as(x)
+
 class ResidualBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1):
+    def __init__(self, in_channels, out_channels, stride=1, use_se=True):
         super(ResidualBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels)
+        self.se = SEBlock(out_channels) if use_se else nn.Identity()
         
         self.shortcut = nn.Sequential()
         if stride != 1 or in_channels != out_channels:
@@ -26,6 +45,7 @@ class ResidualBlock(nn.Module):
         out = self.relu(out)
         out = self.conv2(out)
         out = self.bn2(out)
+        out = self.se(out)
         out += residual
         out = self.relu(out)
         return out
@@ -39,16 +59,16 @@ class EngineCRNN(nn.Module):
         self.bn1 = nn.BatchNorm2d(32)
         self.relu = nn.ReLU(inplace=True)
         
-        # Residual Blocks
+        # Residual Blocks with SE
         self.layer1 = ResidualBlock(32, 64, stride=2)
         self.layer2 = ResidualBlock(64, 128, stride=2)
         self.layer3 = ResidualBlock(128, 256, stride=2)
-        self.layer4 = ResidualBlock(256, 256, stride=2)
+        self.layer4 = ResidualBlock(256, 512, stride=2) # Increased to 512
         
-        self.spatial_dropout = nn.Dropout2d(0.2) # New: Drop entire feature maps
+        self.spatial_dropout = nn.Dropout2d(0.25)
 
         self.lstm = nn.LSTM(
-            input_size=256, 
+            input_size=512, 
             hidden_size=config.LSTM_HIDDEN_SIZE, 
             num_layers=config.LSTM_LAYERS, 
             batch_first=True,
@@ -63,10 +83,11 @@ class EngineCRNN(nn.Module):
         )
         
         self.classifier = nn.Sequential(
-            nn.Linear(config.LSTM_HIDDEN_SIZE * 2, 128),
+            nn.Linear(config.LSTM_HIDDEN_SIZE * 2, 256),
             nn.ReLU(inplace=True),
+            nn.BatchNorm1d(256),
             nn.Dropout(0.5),
-            nn.Linear(128, num_classes)
+            nn.Linear(256, num_classes)
         )
         
         self.apply(self._init_weights)
@@ -90,14 +111,14 @@ class EngineCRNN(nn.Module):
         
         x = self.spatial_dropout(x)
         
-        # Pool frequency bins and keep the temporal axis as the sequence.
+        # Pool frequency bins
         x = torch.mean(x, dim=2)
         x = x.permute(0, 2, 1).contiguous()
         
         # LSTM
         lstm_out, _ = self.lstm(x) 
 
-        # Attention pooling keeps stronger focus on informative time slices.
+        # Attention pooling
         attention_logits = self.temporal_attention(lstm_out)
         attention_weights = torch.softmax(attention_logits, dim=1)
         pooled = torch.sum(attention_weights * lstm_out, dim=1)
