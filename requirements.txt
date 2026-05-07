@@ -10,5 +10,3 @@ joblib
 pandas
 matplotlib
 seaborn
-framer-motion
-axios
