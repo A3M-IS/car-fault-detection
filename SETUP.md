@@ -23,6 +23,7 @@ Backend runs on: http://localhost:8000
 ```bash
 cd frontend
 npm install
+npm run build
 ```
 
 ### 5. Start Frontend (Terminal 2)
