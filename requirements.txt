@@ -5,5 +5,8 @@ scikit-learn
 joblib
 tqdm
 matplotlib
-streamlit
 pillow
+pillow
+fastapi
+uvicorn[standard]
+python-multipart

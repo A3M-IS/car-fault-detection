@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 import numpy as np
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
@@ -42,15 +42,19 @@ def prepare_data():
         import organize_dataset
         organize_dataset.organize_dataset()
         
-    train_files, train_labels_raw = utils.get_audio_files(train_dir)
-    test_files, test_labels_raw = utils.get_audio_files(test_dir)
+    train_files, train_labels_folders = utils.get_audio_files(train_dir)
+    test_files, test_labels_folders = utils.get_audio_files(test_dir)
+    
+    # Apply FAULT_MAPPING from config
+    train_labels_raw = [config.FAULT_MAPPING.get(l, l) for l in train_labels_folders]
+    test_labels_raw = [config.FAULT_MAPPING.get(l, l) for l in test_labels_folders]
     
     if not train_files or not test_files:
         raise ValueError("Training or Testing files not found.")
     
-    # Label Encoding (fit on all classes found in config or dataset)
+    # Label Encoding
     le = LabelEncoder()
-    # Ensure all possible labels are included
+    # Use grouped labels
     all_labels = sorted(list(set(train_labels_raw + test_labels_raw)))
     le.fit(all_labels)
     
@@ -77,21 +81,35 @@ def prepare_data():
     # weights = total / (num_classes * count)
     class_weights = total_samples / (len(classes) * class_counts)
     class_weights = torch.tensor(class_weights, dtype=torch.float32)
+
+    sampler = None
+    if config.USE_BALANCED_SAMPLING:
+        sample_weights = class_weights[train_labels_split].double()
+        sampler = WeightedRandomSampler(
+            weights=sample_weights,
+            num_samples=len(sample_weights),
+            replacement=True,
+        )
     
     print(f"Dataset Split: Train={len(train_files_split)}, Val={len(val_files)}, Test={len(test_files)}")
     print(f"Class weights: {class_weights}")
     
-    return (train_files_split, train_labels_split), (val_files, val_labels), (test_files, test_labels), classes, class_weights
+    return (train_files_split, train_labels_split), (val_files, val_labels), (test_files, test_labels), classes, class_weights, sampler
 
 def get_dataloaders():
     """Create PyTorch DataLoaders."""
-    (train_files, train_labels), (val_files, val_labels), (test_files, test_labels), classes, class_weights = prepare_data()
+    (train_files, train_labels), (val_files, val_labels), (test_files, test_labels), classes, class_weights, sampler = prepare_data()
     
     train_ds = EngineAudioDataset(train_files, train_labels, augment=config.USE_AUGMENTATION)
     val_ds = EngineAudioDataset(val_files, val_labels, augment=False)
     test_ds = EngineAudioDataset(test_files, test_labels, augment=False)
     
-    train_loader = DataLoader(train_ds, batch_size=config.BATCH_SIZE, shuffle=True)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=config.BATCH_SIZE,
+        shuffle=False if sampler is not None else True,
+        sampler=sampler,
+    )
     val_loader = DataLoader(val_ds, batch_size=config.BATCH_SIZE, shuffle=False)
     test_loader = DataLoader(test_ds, batch_size=config.BATCH_SIZE, shuffle=False)
     

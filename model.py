@@ -46,17 +46,20 @@ class EngineCRNN(nn.Module):
         self.layer4 = ResidualBlock(256, 256, stride=2)
         
         self.spatial_dropout = nn.Dropout2d(0.2) # New: Drop entire feature maps
-        
-        # Output after 4 strides of 2: 128 -> 8.
-        # Shape: (batch, 256, 8, 8)
-        
+
         self.lstm = nn.LSTM(
-            input_size=256 * 8, 
+            input_size=256, 
             hidden_size=config.LSTM_HIDDEN_SIZE, 
             num_layers=config.LSTM_LAYERS, 
             batch_first=True,
             dropout=config.DROPOUT if config.LSTM_LAYERS > 1 else 0,
             bidirectional=True
+        )
+
+        self.temporal_attention = nn.Sequential(
+            nn.Linear(config.LSTM_HIDDEN_SIZE * 2, config.LSTM_HIDDEN_SIZE),
+            nn.Tanh(),
+            nn.Linear(config.LSTM_HIDDEN_SIZE, 1)
         )
         
         self.classifier = nn.Sequential(
@@ -87,18 +90,19 @@ class EngineCRNN(nn.Module):
         
         x = self.spatial_dropout(x)
         
-        # Reshape for Sequence Learning
-        batch, channels, freq, time = x.size()
-        x = x.permute(0, 3, 1, 2).contiguous() 
-        x = x.view(batch, time, channels * freq) 
+        # Pool frequency bins and keep the temporal axis as the sequence.
+        x = torch.mean(x, dim=2)
+        x = x.permute(0, 2, 1).contiguous()
         
         # LSTM
         lstm_out, _ = self.lstm(x) 
-        
-        # Global Average Pooling (over time)
-        avg_out = torch.mean(lstm_out, dim=1) 
-        
-        out = self.classifier(avg_out)
+
+        # Attention pooling keeps stronger focus on informative time slices.
+        attention_logits = self.temporal_attention(lstm_out)
+        attention_weights = torch.softmax(attention_logits, dim=1)
+        pooled = torch.sum(attention_weights * lstm_out, dim=1)
+
+        out = self.classifier(pooled)
         return out
 
 def build_model(num_classes):
