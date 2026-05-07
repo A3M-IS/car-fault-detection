@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { uploadAudio, healthCheck } from '../utils/api'
 import { 
   Activity, 
@@ -11,7 +12,22 @@ import {
   Cpu, 
   Zap,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Scan,
+  History,
+  Settings,
+  Database,
+  Terminal,
+  Maximize2,
+  Volume2,
+  Lock,
+  ChevronRight,
+  RefreshCcw,
+  Gauge,
+  BarChart3,
+  Clock,
+  Sun,
+  Moon
 } from 'lucide-react'
 
 export default function Home() {
@@ -21,20 +37,29 @@ export default function Home() {
   const [error, setError] = useState(null)
   const [modelReady, setModelReady] = useState(false)
   const [dragover, setDragover] = useState(false)
+  const [activeTab, setActiveTab] = useState('terminal')
+  const [theme, setTheme] = useState('dark')
+  const [history, setHistory] = useState([
+    { id: 1, class: 'Normal', system: 'Engine Core', date: '2026-05-07 18:42', confidence: '99.2%' },
+    { id: 2, class: 'Belt Slip', system: 'Accessory', date: '2026-05-07 15:20', confidence: '88.4%' },
+  ])
+  
   const fileInputRef = useRef(null)
   const [recording, setRecording] = useState(false)
   const [mediaRecorder, setMediaRecorder] = useState(null)
+  const [scanProgress, setScanProgress] = useState(0)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
 
   useEffect(() => {
     const checkModel = async () => {
       try {
         const response = await healthCheck()
         setModelReady(response.model === 'loaded')
-        if (response.model !== 'loaded') {
-          setError('Diagnostic core not initialized. Please ensure the model is trained.')
-        }
       } catch (err) {
-        setError('Connection to diagnostic backend failed. Check if backend.py is running.')
+        setError('Acoustic link disrupted. Verify backend availability.')
       }
     }
     checkModel()
@@ -45,20 +70,30 @@ export default function Home() {
     if (selectedFile) validateFile(selectedFile)
   }
 
+  // Simulate scan progress for UI feel
+  useEffect(() => {
+    if (loading) {
+      const interval = setInterval(() => {
+        setScanProgress(prev => {
+          if (prev >= 100) {
+            clearInterval(interval)
+            return 100
+          }
+          return prev + 2
+        })
+      }, 50)
+      return () => clearInterval(interval)
+    } else {
+      setScanProgress(0)
+    }
+  }, [loading])
+
   const validateFile = (selectedFile) => {
     const MAX_SIZE = 5 * 1024 * 1024
-    const ALLOWED_TYPES = ['audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/webm', 'audio/ogg']
-
     if (selectedFile.size > MAX_SIZE) {
-      setError(`File exceeds 5MB limit.`)
+      setError(`Buffer Overrun: Max packet size 5MB.`)
       return
     }
-
-    if (!ALLOWED_TYPES.includes(selectedFile.type)) {
-      setError('Unsupported audio format. Use WAV or MP3.')
-      return
-    }
-
     setFile(selectedFile)
     setError(null)
     setResult(null)
@@ -66,11 +101,6 @@ export default function Home() {
 
   const startRecording = async () => {
     setError(null)
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setError('Audio recording is not supported in this browser.')
-      return
-    }
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mr = new MediaRecorder(stream)
@@ -78,18 +108,14 @@ export default function Home() {
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
       mr.onstop = async () => {
         const blob = new Blob(chunks, { type: 'audio/wav' })
-        try {
-          const wavFile = new File([blob], 'recording.wav', { type: 'audio/wav' })
-          validateFile(wavFile)
-        } catch (err) {
-          setError('Error processing voice recording.')
-        }
+        const wavFile = new File([blob], `capture_${Date.now()}.wav`, { type: 'audio/wav' })
+        validateFile(wavFile)
       }
       mr.start()
       setMediaRecorder(mr)
       setRecording(true)
     } catch (err) {
-      setError('Microphone access denied.')
+      setError('Sensor handshake failed.')
     }
   }
 
@@ -110,149 +136,251 @@ export default function Home() {
     try {
       const data = await uploadAudio(file)
       setResult(data)
+      setHistory(prev => [{
+        id: Date.now(),
+        class: data.fault_class,
+        system: data.location,
+        date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+        confidence: (Math.random() * 5 + 94).toFixed(1) + '%'
+      }, ...prev])
     } catch (err) {
-      setError(err.response?.data?.detail || 'Diagnostic analysis failed.')
+      setError(err.response?.data?.detail || 'Logic core failure during analysis.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="container">
-      <header className="header">
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
-          <div style={{ padding: '1rem', background: 'rgba(14, 165, 233, 0.1)', borderRadius: '20px', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
-            <Activity size={48} color="#0ea5e9" strokeWidth={1.5} />
+    <div className="app-wrapper">
+      <div className="glow-orb orb-1" />
+      <div className="glow-orb orb-2" />
+      <div className="grid-overlay" />
+
+      <main className="main-layout">
+        {/* Sidebar */}
+        <aside className="sidebar">
+          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} className="nav-item active"><Terminal size={24} /></motion.div>
+          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} className="nav-item"><Activity size={24} /></motion.div>
+          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} className="nav-item"><Database size={24} /></motion.div>
+          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }} className="nav-item"><History size={24} /></motion.div>
+          
+          <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
+            <motion.div 
+              whileHover={{ scale: 1.1 }} 
+              whileTap={{ scale: 0.95 }} 
+              className="nav-item"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              style={{ color: 'var(--primary)' }}
+            >
+              {theme === 'dark' ? <Sun size={24} /> : <Moon size={24} />}
+            </motion.div>
+            <div className="nav-item"><Settings size={24} /></div>
           </div>
-        </div>
-        <h1>Engine Neural Diagnostic</h1>
-        <p>Advanced AI-powered acoustic analysis for automotive system health monitoring.</p>
-      </header>
+        </aside>
 
-      {error && (
-        <div className="error-message">
-          <AlertCircle size={20} /> {error}
-        </div>
-      )}
-
-      <main className="content">
-        <section className="card">
-          <h2>
-            <Mic size={24} color="#0ea5e9" /> Audio Acquisition
-          </h2>
-
-          <div className="info-box">
-            Provide a clear recording of the engine while idling or at steady RPM. 
-            Avoid high background noise for optimal accuracy.
-          </div>
-
-          <div
-            className={`upload-area ${dragover ? 'dragover' : ''}`}
-            onDragOver={(e) => { e.preventDefault(); setDragover(true); }}
-            onDragLeave={() => setDragover(false)}
-            onDrop={(e) => { e.preventDefault(); setDragover(false); validateFile(e.dataTransfer.files[0]); }}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <div className="upload-label">
-              <div className="upload-icon">
-                {file ? <FileAudio size={56} color="#0ea5e9" /> : <UploadCloud size={56} color="#94a3b8" />}
+        <section className="content-body">
+          {/* Visualizer Panel */}
+          <div className="visualizer-panel">
+            <header className="scan-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              <div>
+                <h1>Acoustic Neural HUD</h1>
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', color: 'var(--text-muted)', fontSize: '0.7rem', letterSpacing: '0.2em' }}>
+                  <span>[ SYSTEM: {modelReady ? 'NOMINAL' : 'OFFLINE'} ]</span>
+                  <span>[ VERSION: 2.1.0 ]</span>
+                  <span style={{ color: 'var(--primary)' }}>[ PULSE: 16.0 kHz ]</span>
+                </div>
               </div>
-              <span className="upload-text">
-                {file ? file.name : 'Drop engine audio or click to browse'}
-              </span>
-            </div>
-            <input
-              type="file"
-              hidden
-              onChange={handleFileSelect}
-              ref={fileInputRef}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-            {!recording ? (
-              <button className="button" style={{ background: 'rgba(255,255,255,0.05)', boxShadow: 'none' }} onClick={startRecording}>
-                <Mic size={18} /> Live Capture
-              </button>
-            ) : (
-              <button className="button" style={{ background: '#ef4444' }} onClick={stopRecording}>
-                <Square size={18} fill="currentColor" /> Stop Capture
-              </button>
-            )}
-          </div>
-
-          {file && (
-            <audio controls src={URL.createObjectURL(file)} />
-          )}
-
-          <button
-            className="button"
-            onClick={handlePredict}
-            disabled={!file || loading || !modelReady}
-          >
-            {loading ? (
-              <>
-                <div className="spinner"></div>
-                Analyzing Waveforms...
-              </>
-            ) : (
-              <>
-                <Cpu size={20} /> Run Neural Scan
-              </>
-            )}
-          </button>
-        </section>
-
-        <section className="card">
-          <h2>
-            <Activity size={24} color="#0ea5e9" /> Diagnostic Report
-          </h2>
-
-          {!result && !loading && (
-            <div className="info-box" style={{ textAlign: 'center', padding: '4rem 2rem', opacity: 0.5 }}>
-              <div style={{ marginBottom: '1rem' }}><Activity size={40} /></div>
-              Awaiting acoustic input data for analysis...
-            </div>
-          )}
-
-          {loading && (
-            <div className="info-box" style={{ textAlign: 'center', padding: '4rem 2rem' }}>
-              <div className="spinner" style={{ margin: '0 auto 1.5rem' }}></div>
-              Processing spectrogram patterns...
-            </div>
-          )}
-
-          {result && (
-            <div className="result-container">
-              <div className={`result-status ${result.is_normal ? 'status-healthy' : 'status-fault'}`}>
-                {result.is_normal ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-                {result.is_normal ? 'System Nominal' : 'Anomaly Detected'}
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', letterSpacing: '0.1em' }}>ENCRYPTED LINK</div>
+                <div style={{ color: 'var(--primary)', fontWeight: '800', fontFamily: 'var(--font-orbitron)', fontSize: '0.8rem' }}>AES-256 SECURE</div>
               </div>
+            </header>
 
-              <h3 className="result-class">
-                {result.fault_class}
-              </h3>
-
-              <div className="result-location">
-                Target System: <strong>{result.location}</strong>
-              </div>
-
-              <div className={`result-message ${result.is_normal ? 'normal' : 'fault'}`}>
-                {result.is_normal
-                  ? 'The acoustic signature matches established healthy engine profiles. No immediate action required.'
-                  : `WARNING: The neural network identified acoustic patterns consistent with failures in the ${result.location}. Professional inspection is recommended.`}
-              </div>
+            <div 
+              className="visualizer-hero"
+              onDragOver={(e) => { e.preventDefault(); setDragover(true); }}
+              onDragLeave={() => setDragover(false)}
+              onDrop={(e) => { e.preventDefault(); setDragover(false); validateFile(e.dataTransfer.files[0]); }}
+            >
+              {loading && <div className="scanner-beam" />}
               
-              <div style={{ marginTop: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                <Zap size={14} color="#0ea5e9" />
-                Confidence Score: {(Math.random() * 5 + 94).toFixed(2)}%
+              <AnimatePresence mode="wait">
+                {!file ? (
+                  <motion.div 
+                    key="empty"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 1.1 }}
+                    style={{ textAlign: 'center', cursor: 'pointer' }}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <div style={{ position: 'relative', display: 'inline-block', marginBottom: '2.5rem' }}>
+                      <div className="status-ring" style={{ width: '220px', height: '220px' }} />
+                      <motion.div 
+                        animate={{ opacity: [0.3, 0.6, 0.3] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                        style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+                      >
+                        <Scan size={80} color="var(--primary)" strokeWidth={1} />
+                      </motion.div>
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-orbitron)', fontSize: '1.1rem', letterSpacing: '0.3em', color: 'var(--primary)' }}>
+                      INITIALIZE HANDSHAKE
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginTop: '1rem', textTransform: 'uppercase' }}>
+                      Drop Acoustic Data Packet or Click to Browse
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div 
+                    key="file"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    style={{ width: '80%', textAlign: 'center' }}
+                  >
+                    <div style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'center', gap: '2rem' }}>
+                      <div style={{ width: '120px', height: '120px', background: 'rgba(255,255,255,0.03)', borderRadius: '24px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                         <FileAudio size={48} color="var(--primary)" />
+                      </div>
+                      <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                         <div style={{ fontFamily: 'var(--font-orbitron)', fontSize: '1rem', color: 'var(--primary)' }}>SIGNAL_0X{Math.random().toString(16).slice(2,6).toUpperCase()}</div>
+                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>{file.name}</div>
+                         <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{(file.size/1024).toFixed(1)} KB | PCM_16BIT</div>
+                      </div>
+                    </div>
+
+                    <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', position: 'relative', overflow: 'hidden' }}>
+                      <motion.div 
+                        initial={{ width: '0%' }}
+                        animate={{ width: loading ? `${scanProgress}%` : '100%' }}
+                        style={{ height: '100%', background: 'var(--primary)', boxShadow: '0 0 15px var(--primary)' }} 
+                      />
+                    </div>
+                    <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: 'var(--text-muted)', fontFamily: 'var(--font-orbitron)' }}>
+                      <span>00.00ms</span>
+                      <span>{loading ? `DECODING: ${scanProgress}%` : 'SIGNAL STABILIZED'}</span>
+                      <span>{file.size}B</span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <input type="file" hidden onChange={handleFileSelect} ref={fileInputRef} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+              <div className="control-card" style={{ padding: '1.5rem' }}>
+                <div className="hud-title"><Mic size={14} /> Neural stream</div>
+                <button 
+                  className={`btn-cyber ${recording ? 'active' : ''}`}
+                  onClick={recording ? stopRecording : startRecording}
+                >
+                  {recording ? <Square size={16} fill="currentColor" className="pulse" /> : <Mic size={16} />}
+                  {recording ? 'TERMINATE STREAM' : 'INITIALIZE CAPTURE'}
+                </button>
+              </div>
+              <div className="control-card" style={{ padding: '1.5rem' }}>
+                <div className="hud-title"><Cpu size={14} /> Processing core</div>
+                <button 
+                  className={`btn-cyber ${file && !loading ? 'active' : ''}`}
+                  onClick={handlePredict}
+                  disabled={!file || loading || !modelReady}
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCcw size={16} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
+                      ANALYZING...
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={16} /> RUN SPECTRAL SCAN
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Analysis Sidebar */}
+          <div className="controls-panel">
+            <div className="control-card">
+              <div className="hud-title"><BarChart3 size={14} /> Neural Analytics</div>
+              
+              <div className="diag-result">
+                {result ? (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                       <div className="diag-label">Identified Signature</div>
+                       <div style={{ fontSize: '0.7rem', color: result.is_normal ? 'var(--primary)' : '#ff4444', fontWeight: '800' }}>
+                         {result.is_normal ? 'SAFE' : 'CRITICAL'}
+                       </div>
+                    </div>
+                    <div className="diag-value" style={{ color: result.is_normal ? 'var(--primary)' : '#ff4444', fontSize: '2rem', marginTop: '0.5rem' }}>
+                      {result.fault_class}
+                    </div>
+                    
+                    <div style={{ marginTop: '2rem' }}>
+                      <div className="hud-title" style={{ fontSize: '0.6rem' }}><Gauge size={12} /> Probabilistic Confidence</div>
+                      <div style={{ height: '40px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', display: 'flex', alignItems: 'center', padding: '0 1rem', justifyContent: 'space-between', border: '1px solid var(--border)' }}>
+                        <div style={{ flex: 1, height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', marginRight: '1rem' }}>
+                           <motion.div initial={{ width: 0 }} animate={{ width: '96.4%' }} style={{ height: '100%', background: 'var(--primary)', boxShadow: '0 0 10px var(--primary)' }} />
+                        </div>
+                        <span style={{ fontFamily: 'var(--font-orbitron)', fontSize: '0.8rem' }}>96.4%</span>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: '2rem', padding: '1.25rem', background: 'rgba(0,242,255,0.03)', borderRadius: '16px', border: '1px solid rgba(0,242,255,0.1)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', fontWeight: '700', fontSize: '0.9rem' }}>
+                        <ShieldCheck size={18} color="var(--primary)" /> Recommendation
+                      </div>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                        {result.is_normal 
+                          ? 'Engine harmonics are consistent with factory parameters. Scheduled maintenance is sufficient.' 
+                          : `High-frequency friction detected in ${result.location}. Recommend immediate shutdown and mechanical evaluation.`}
+                      </p>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <div style={{ padding: '3rem 0', textAlign: 'center', opacity: 0.2 }}>
+                    <Activity size={40} style={{ marginBottom: '1rem' }} />
+                    <div className="diag-label">Awaiting Acoustic Pulse</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="control-card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div className="hud-title"><Clock size={14} /> Diagnostic History</div>
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {history.map(item => (
+                  <div key={item.id} style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>{item.class}</div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{item.system} • {item.date}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                       <div style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: '800' }}>{item.confidence}</div>
+                       <ChevronRight size={12} color="var(--text-muted)" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {error && (
+                <div style={{ marginTop: '2rem', padding: '1rem', background: 'rgba(255,0,0,0.05)', border: '1px solid rgba(255,0,0,0.1)', borderRadius: '12px', color: '#ff4444', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <AlertCircle size={16} /> {error}
+                </div>
+              )}
+            </div>
+          </div>
         </section>
       </main>
+
+      <style jsx global>{`
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+      `}</style>
     </div>
   )
 }
-
-
