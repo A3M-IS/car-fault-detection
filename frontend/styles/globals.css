@@ -302,7 +302,15 @@ h1, h2, h3, h4 {
   }
   
   .terminal-grid {
+    grid-template-columns: 1fr !important;
     gap: 1.5rem;
+    height: auto;
+    overflow-x: hidden;
+  }
+
+  .main-layout {
+    overflow-x: hidden;
+    width: 100vw;
   }
 }
 
