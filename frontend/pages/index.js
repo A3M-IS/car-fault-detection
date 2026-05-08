@@ -40,6 +40,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('terminal')
   const [theme, setTheme] = useState('dark')
   const [history, setHistory] = useState([])
+  const [previewUrl, setPreviewUrl] = useState(null)
   const [stats, setStats] = useState({
     totalChecks: 0,
     averageAccuracy: 94.2,
@@ -58,19 +59,6 @@ export default function Home() {
   const [scanProgress, setScanProgress] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const audioRef = useRef(null)
-
-  // Audio Playback Handler
-  const togglePlay = () => {
-    if (!audioRef.current) return
-    if (isPlaying) {
-      audioRef.current.pause()
-    } else {
-      audioRef.current.play()
-    }
-    setIsPlaying(!isPlaying)
-  }
-
-  const handleAudioEnd = () => setIsPlaying(false)
 
   const encodeWav = (audioBuffer) => {
     const numChannels = 1
@@ -161,6 +149,16 @@ export default function Home() {
       setScanProgress(0)
     }
   }, [loading])
+
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(file)
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
 
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark'
