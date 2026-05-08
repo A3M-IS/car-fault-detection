@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from starlette.concurrency import run_in_threadpool
 import io
 import os
 import torch
@@ -65,14 +66,19 @@ def _is_probably_audio_upload(upload_file: UploadFile) -> bool:
     return any(content_type.startswith(prefix) for prefix in ALLOWED_AUDIO_MIME_PREFIXES)
 
 # Production CORS Configuration
+# We use regex to support Vercel's preview URLs and subdomains
 ALLOWED_ORIGINS = os.getenv(
     "ALLOWED_ORIGINS", 
-    "http://localhost:3000,http://localhost:8000,https://car-fault-detection.vercel.app"
+    "http://localhost:3000,http://localhost:8000"
 ).split(",")
+
+# Ensure all origins are stripped of whitespace
+ALLOWED_ORIGINS = [origin.strip().rstrip("/") for origin in ALLOWED_ORIGINS if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Support all Vercel subdomains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -140,8 +146,8 @@ async def predict(file: UploadFile = File(...)):
             tmp.write(contents)
             tmp_path = tmp.name
 
-        # Run prediction using temp file path
-        fault_class, location = detector.predict(tmp_path)
+        # Run prediction in a thread pool to avoid blocking the event loop
+        fault_class, location = await run_in_threadpool(detector.predict, tmp_path)
 
         # Clean up temp file
         try:

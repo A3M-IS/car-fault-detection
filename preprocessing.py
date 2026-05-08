@@ -58,8 +58,10 @@ def extract_mel_spectrogram(file_path, augment=False):
     Optional: Apply audio-level and spectrogram-level augmentation.
     """
     try:
+        # Skip cache during real-time inference for better latency
+        # Hashing the whole file can be slower than the 1s processing itself
         cache_path = None
-        if config.ENABLE_FEATURE_CACHE and not augment:
+        if config.ENABLE_FEATURE_CACHE and augment:
             cache_path = _cache_file_path(file_path)
             if os.path.exists(cache_path):
                 return np.load(cache_path)
