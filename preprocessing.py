@@ -3,6 +3,7 @@ import numpy as np
 import config
 import hashlib
 import os
+import tempfile
 
 def add_noise(y, noise_factor=0.005):
     noise = np.random.randn(len(y))
@@ -41,7 +42,13 @@ def apply_spec_augment(mel_spec, time_mask_param=6, freq_mask_param=15):
 
 
 def _cache_file_path(file_path):
-    key = f"{file_path}|{config.SAMPLE_RATE}|{config.N_MELS}|{config.N_FFT}|{config.HOP_LENGTH}|{config.IMG_SIZE[1]}"
+    try:
+        with open(file_path, "rb") as audio_file:
+            file_digest = hashlib.md5(audio_file.read()).hexdigest()
+    except Exception:
+        file_digest = os.path.basename(file_path)
+
+    key = f"{file_digest}|{config.SAMPLE_RATE}|{config.N_MELS}|{config.N_FFT}|{config.HOP_LENGTH}|{config.IMG_SIZE[1]}"
     digest = hashlib.md5(key.encode("utf-8")).hexdigest()
     return os.path.join(config.FEATURE_CACHE_DIR, f"{digest}.npy")
 
@@ -57,8 +64,15 @@ def extract_mel_spectrogram(file_path, augment=False):
             if os.path.exists(cache_path):
                 return np.load(cache_path)
 
-        # Load audio
-        y, sr = librosa.load(file_path, sr=config.SAMPLE_RATE, mono=True)
+        # Load only the portion needed by the model
+        y, sr = librosa.load(
+            file_path,
+            sr=config.SAMPLE_RATE,
+            mono=True,
+            duration=config.DURATION,
+            offset=0.0,
+            res_type="kaiser_fast",
+        )
         
         # Audio-level augmentation (only if augment=True)
         if augment:

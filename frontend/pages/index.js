@@ -57,6 +57,60 @@ export default function Home() {
   const [mediaRecorder, setMediaRecorder] = useState(null)
   const [scanProgress, setScanProgress] = useState(0)
 
+  const encodeWav = (audioBuffer) => {
+    const numChannels = 1
+    const sampleRate = audioBuffer.sampleRate
+    const source = audioBuffer.numberOfChannels > 1
+      ? audioBuffer.getChannelData(0).map((_, index) => {
+          let sum = 0
+          for (let channel = 0; channel < audioBuffer.numberOfChannels; channel += 1) {
+            sum += audioBuffer.getChannelData(channel)[index]
+          }
+          return sum / audioBuffer.numberOfChannels
+        })
+      : audioBuffer.getChannelData(0)
+
+    const buffer = new ArrayBuffer(44 + source.length * 2)
+    const view = new DataView(buffer)
+    const writeString = (offset, text) => {
+      for (let i = 0; i < text.length; i += 1) {
+        view.setUint8(offset + i, text.charCodeAt(i))
+      }
+    }
+
+    writeString(0, 'RIFF')
+    view.setUint32(4, 36 + source.length * 2, true)
+    writeString(8, 'WAVE')
+    writeString(12, 'fmt ')
+    view.setUint32(16, 16, true)
+    view.setUint16(20, 1, true)
+    view.setUint16(22, numChannels, true)
+    view.setUint32(24, sampleRate, true)
+    view.setUint32(28, sampleRate * numChannels * 2, true)
+    view.setUint16(32, numChannels * 2, true)
+    view.setUint16(34, 16, true)
+    writeString(36, 'data')
+    view.setUint32(40, source.length * 2, true)
+
+    let offset = 44
+    for (let i = 0; i < source.length; i += 1) {
+      const sample = Math.max(-1, Math.min(1, source[i]))
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true)
+      offset += 2
+    }
+
+    return buffer
+  }
+
+  const blobToWavFile = async (blob) => {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+    const arrayBuffer = await blob.arrayBuffer()
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0))
+    const wavBuffer = encodeWav(audioBuffer)
+    await audioContext.close()
+    return new Blob([wavBuffer], { type: 'audio/wav' })
+  }
+
   useEffect(() => {
     const savedSettings = localStorage.getItem('diag-settings')
     if (savedSettings) setAppSettings(JSON.parse(savedSettings))
@@ -107,8 +161,29 @@ export default function Home() {
 
   const validateFile = (selectedFile) => {
     const MAX_SIZE = 5 * 1024 * 1024
+    const MIN_SIZE = 1024
+    const allowedTypes = [
+      'audio/wav',
+      'audio/x-wav',
+      'audio/mpeg',
+      'audio/mp3',
+      'audio/mp4',
+      'audio/aac',
+      'audio/ogg',
+      'audio/flac',
+      'audio/webm',
+      'audio/opus'
+    ]
     if (selectedFile.size > MAX_SIZE) {
       setError(`File is too big. Max size is 5MB.`)
+      return
+    }
+    if (selectedFile.size < MIN_SIZE) {
+      setError('Audio file is too small or empty. Please upload a valid sound file.')
+      return
+    }
+    if (selectedFile.type && !allowedTypes.includes(selectedFile.type.toLowerCase())) {
+      setError('Unsupported file type. Please upload a WAV, MP3, M4A, OGG, FLAC, AAC, WEBM, or OPUS file.')
       return
     }
     setFile(selectedFile)
@@ -124,9 +199,14 @@ export default function Home() {
       const chunks = []
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
       mr.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'audio/wav' })
-        const wavFile = new File([blob], `recording_${Date.now()}.wav`, { type: 'audio/wav' })
-        validateFile(wavFile)
+        try {
+          const recordedBlob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' })
+          const wavBlob = await blobToWavFile(recordedBlob)
+          const wavFile = new File([wavBlob], `recording_${Date.now()}.wav`, { type: 'audio/wav' })
+          validateFile(wavFile)
+        } catch (recordingError) {
+          setError('Could not convert microphone recording to WAV.')
+        }
       }
       mr.start()
       setMediaRecorder(mr)

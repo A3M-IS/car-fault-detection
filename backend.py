@@ -10,6 +10,9 @@ import config
 detector = None
 model_path = os.path.join(config.MODELS_DIR, "best_model.pth")
 le_path = os.path.join(config.MODELS_DIR, "label_encoder.joblib")
+ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".webm", ".opus"}
+ALLOWED_AUDIO_MIME_PREFIXES = ("audio/",)
+MIN_AUDIO_SIZE_BYTES = 1024
 
 
 def _load_detector():
@@ -48,6 +51,18 @@ def ensure_latest_detector():
     if current_mtime is not None and getattr(detector, "model_mtime", None) != current_mtime:
         print("🔄 Model checkpoint changed, reloading latest weights...")
         _load_detector()
+
+
+def _is_probably_audio_upload(upload_file: UploadFile) -> bool:
+    filename = upload_file.filename or ""
+    _, ext = os.path.splitext(filename)
+    ext = ext.lower()
+    content_type = (upload_file.content_type or "").lower()
+
+    if ext in ALLOWED_AUDIO_EXTENSIONS:
+        return True
+
+    return any(content_type.startswith(prefix) for prefix in ALLOWED_AUDIO_MIME_PREFIXES)
 
 # Production CORS Configuration
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000").split(",")
@@ -90,10 +105,21 @@ async def predict(file: UploadFile = File(...)):
             status_code=503,
             detail="Model not loaded. Please train the model first using: python main.py"
         )
+
+    if not _is_probably_audio_upload(file):
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Please upload a WAV, MP3, M4A, OGG, FLAC, AAC, WEBM, or OPUS audio file."
+        )
     
     # Validate file size
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
     contents = await file.read()
+    if len(contents) < MIN_AUDIO_SIZE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail="Audio file is too small or empty. Please upload a valid recording."
+        )
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=400,
