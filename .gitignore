@@ -16,8 +16,10 @@ data/
 unprocessedData/
 *.pth
 *.joblib
-*.png
-*.txt
+!frontend/public/*.png
+!frontend/public/*.jpg
+!frontend/public/*.svg
+!frontend/public/*.ico
 
 # Node.js
 node_modules/

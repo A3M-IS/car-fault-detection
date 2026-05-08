@@ -61,25 +61,13 @@ def _is_probably_audio_upload(upload_file: UploadFile) -> bool:
 
     return any(content_type.startswith(prefix) for prefix in ALLOWED_AUDIO_MIME_PREFIXES)
 
-# Production CORS Configuration
-ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS", 
-    "http://localhost:3000,http://localhost:8000,https://car-fault-detection.vercel.app,https://car-fault-detection.vercel.app/"
-).split(",")
-
-# Ensure all origins are stripped of whitespace and trailing slashes for exact matching
-ALLOWED_ORIGINS = [origin.strip().rstrip("/") for origin in ALLOWED_ORIGINS if origin.strip()]
-# Add variants with trailing slashes back just to be absolutely safe
-ALLOWED_ORIGINS += [f"{o}/" for o in ALLOWED_ORIGINS]
-
+# Permissive CORS for production stability
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"https://car-fault-detection.*\.vercel\.app",  # More specific regex
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
 @app.get("/")

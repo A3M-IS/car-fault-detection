@@ -7,9 +7,6 @@ librosa
 numpy
 scikit-learn
 joblib
-pandas
-matplotlib
-seaborn
 soundfile
 resampy
 scipy
