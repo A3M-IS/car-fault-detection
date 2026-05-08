@@ -43,14 +43,10 @@ app = FastAPI(title="Car Engine Fault Detection API", version="1.0.0", lifespan=
 
 
 def ensure_latest_detector():
+    """Ensure the model is loaded. Does NOT reload on every request to prevent latency."""
     global detector
     if detector is None:
-        _load_detector()
-        return
-
-    current_mtime = os.path.getmtime(model_path) if os.path.exists(model_path) else None
-    if current_mtime is not None and getattr(detector, "model_mtime", None) != current_mtime:
-        print("🔄 Model checkpoint changed, reloading latest weights...")
+        print("🚀 Detector is None, attempting to load...")
         _load_detector()
 
 
@@ -87,7 +83,6 @@ app.add_middleware(
 @app.get("/")
 async def root():
     """API Health check"""
-    ensure_latest_detector()
     model_status = "loaded" if detector else "not loaded"
     return {
         "status": "running",
@@ -97,17 +92,9 @@ async def root():
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    """
-    Upload audio file and get fault prediction
-    
-    - **file**: WAV or MP3 audio file (max 5MB, 0.5-10 seconds)
-    
-    Returns:
-    - fault_class: Detected fault category
-    - location: Engine component location
-    - confidence: Model confidence score
-    """
-    ensure_latest_detector()
+    # Lazy load only if absolutely necessary
+    if detector is None:
+        ensure_latest_detector()
 
     if detector is None:
         raise HTTPException(
@@ -136,11 +123,23 @@ async def predict(file: UploadFile = File(...)):
         )
     
     try:
-        # Pass the bytes directly to avoid disk I/O latency
-        audio_stream = io.BytesIO(contents)
-        
+        # Use a temporary file for librosa compatibility and stability
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+            print(f"📝 Writing {len(contents)} bytes to temp file: {tmp.name}")
+            tmp.write(contents)
+            tmp_path = tmp.name
+
+        print("🧠 Running AI Inference...")
         # Run prediction in a thread pool to avoid blocking the event loop
-        fault_class, location = await run_in_threadpool(detector.predict, audio_stream)
+        fault_class, location = await run_in_threadpool(detector.predict, tmp_path)
+        print(f"✅ Prediction complete: {fault_class} at {location}")
+
+        # Clean up temp file
+        try:
+            os.unlink(tmp_path)
+        except:
+            pass
 
         return {
             "success": True,
@@ -149,15 +148,18 @@ async def predict(file: UploadFile = File(...)):
             "is_normal": "normal" in fault_class.lower()
         }
     except Exception as e:
+        print(f"❌ Error during prediction: {e}")
         raise HTTPException(
-            status_code=400,
+            status_code=500,
             detail=f"Error processing audio: {str(e)}"
         )
 
 @app.get("/classes")
 async def get_classes():
     """Get list of fault classes the model can detect"""
-    ensure_latest_detector()
+    if detector is None:
+        ensure_latest_detector()
+    
     if detector is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     

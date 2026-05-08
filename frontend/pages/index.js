@@ -256,11 +256,16 @@ export default function Home() {
         setTimeout(() => setStatusMsg(step.msg), step.delay)
       )
 
+      const wakeTimer = setTimeout(() => setStatusMsg('SERVER IS WAKING UP...'), 10000)
+
       const data = await uploadAudio(file)
       
       statusTimers.forEach(clearTimeout)
-      setStatusMsg('COMPLETE')
+      clearTimeout(wakeTimer)
+
+      setStatusMsg('ANALYSIS COMPLETE')
       setResult(data)
+
       setHistory(prev => [{
         id: Date.now(),
         class: data.fault_class,
@@ -269,9 +274,11 @@ export default function Home() {
         confidence: (Math.random() * 5 + 94).toFixed(1) + '%'
       }, ...prev])
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Problem analyzing sound.')
+      const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout')
+      setError(isTimeout ? 'Server timeout. It might be warming up. Please try again.' : (err.response?.data?.detail || err.message || 'Problem analyzing sound.'))
       setStatusMsg('ERROR')
     } finally {
+
       setLoading(false)
     }
   }
