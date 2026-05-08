@@ -218,7 +218,7 @@ export default function Home() {
           const recordedBlob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' })
           const wavBlob = await blobToWavFile(recordedBlob)
           const wavFile = new File([wavBlob], `recording_${Date.now()}.wav`, { type: 'audio/wav' })
-          validateFile(wavFile)
+          await validateFile(wavFile)
         } catch (recordingError) {
           setError('Could not convert microphone recording to WAV.')
         }
@@ -396,6 +396,7 @@ export default function Home() {
                       <span>[ STATUS: {modelReady ? 'WORKING' : 'OFFLINE'} ]</span>
                       <span>[ VERSION: 2.1.0 ]</span>
                       <span style={{ color: 'var(--primary)' }}>[ SOUND FREQ: 16.0 kHz ]</span>
+                    </div>
                     </div>
                   </div>
                   <div className="mobile-hide" style={{ textAlign: 'right' }}>
