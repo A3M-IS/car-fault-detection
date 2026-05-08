@@ -58,6 +58,7 @@ export default function Home() {
   const [mediaRecorder, setMediaRecorder] = useState(null)
   const [scanProgress, setScanProgress] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [statusMsg, setStatusMsg] = useState('READY')
   const audioRef = useRef(null)
 
   const encodeWav = (audioBuffer) => {
@@ -242,9 +243,23 @@ export default function Home() {
     setLoading(true)
     setError(null)
     setResult(null)
+    setStatusMsg('UPLOADING')
 
     try {
+      const statusSteps = [
+        { msg: 'EXTRACTING AUDIO FEATURES', delay: 800 },
+        { msg: 'CRNN AI INFERENCE', delay: 2000 },
+        { msg: 'FINALIZING DIAGNOSIS', delay: 3500 }
+      ]
+
+      const statusTimers = statusSteps.map(step => 
+        setTimeout(() => setStatusMsg(step.msg), step.delay)
+      )
+
       const data = await uploadAudio(file)
+      
+      statusTimers.forEach(clearTimeout)
+      setStatusMsg('COMPLETE')
       setResult(data)
       setHistory(prev => [{
         id: Date.now(),
@@ -254,7 +269,8 @@ export default function Home() {
         confidence: (Math.random() * 5 + 94).toFixed(1) + '%'
       }, ...prev])
     } catch (err) {
-      setError(err.response?.data?.detail || 'Problem analyzing sound.')
+      setError(err.response?.data?.detail || err.message || 'Problem analyzing sound.')
+      setStatusMsg('ERROR')
     } finally {
       setLoading(false)
     }
@@ -441,7 +457,12 @@ export default function Home() {
                       disabled={!file || loading}
                       style={{ cursor: (!file || loading) ? 'not-allowed' : 'pointer', opacity: (!file || loading) ? 0.5 : 1 }}
                     >
-                      {loading ? 'WORKING...' : 'CHECK FOR FAULTS'}
+                      {loading ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                          <RefreshCcw size={18} className="spin" />
+                          <span>{statusMsg}...</span>
+                        </div>
+                      ) : 'CHECK FOR FAULTS'}
                     </button>
                   </div>
                 </div>
@@ -632,6 +653,15 @@ export default function Home() {
           0% { box-shadow: 0 0 0 0 rgba(0, 242, 255, 0.4); }
           70% { box-shadow: 0 0 0 10px rgba(0, 242, 255, 0); }
           100% { box-shadow: 0 0 0 0 rgba(0, 242, 255, 0); }
+        }
+
+        .spin {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>

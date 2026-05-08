@@ -136,24 +136,11 @@ async def predict(file: UploadFile = File(...)):
         )
     
     try:
-        # Write bytes to a temporary file because librosa expects a file path
-        import tempfile
-        _, ext = os.path.splitext(file.filename or '')
-        if not ext:
-            ext = '.wav'
-
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-            tmp.write(contents)
-            tmp_path = tmp.name
-
+        # Pass the bytes directly to avoid disk I/O latency
+        audio_stream = io.BytesIO(contents)
+        
         # Run prediction in a thread pool to avoid blocking the event loop
-        fault_class, location = await run_in_threadpool(detector.predict, tmp_path)
-
-        # Clean up temp file
-        try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
+        fault_class, location = await run_in_threadpool(detector.predict, audio_stream)
 
         return {
             "success": True,
