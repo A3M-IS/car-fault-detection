@@ -56,6 +56,21 @@ export default function Home() {
   const [recording, setRecording] = useState(false)
   const [mediaRecorder, setMediaRecorder] = useState(null)
   const [scanProgress, setScanProgress] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const audioRef = useRef(null)
+
+  // Audio Playback Handler
+  const togglePlay = () => {
+    if (!audioRef.current) return
+    if (isPlaying) {
+      audioRef.current.pause()
+    } else {
+      audioRef.current.play()
+    }
+    setIsPlaying(!isPlaying)
+  }
+
+  const handleAudioEnd = () => setIsPlaying(false)
 
   const encodeWav = (audioBuffer) => {
     const numChannels = 1
@@ -251,7 +266,22 @@ export default function Home() {
     setFile(null)
     setResult(null)
     setError(null)
+    setIsPlaying(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const togglePlay = () => {
+    if (!audioRef.current) return
+    if (isPlaying) {
+      audioRef.current.pause()
+    } else {
+      audioRef.current.play()
+    }
+    setIsPlaying(!isPlaying)
+  }
+
+  const handleAudioEnd = () => {
+    setIsPlaying(false)
   }
 
   return (
@@ -259,6 +289,15 @@ export default function Home() {
       <div className="glow-orb orb-1" />
       <div className="glow-orb orb-2" />
       <div className="grid-overlay" />
+
+      {previewUrl && (
+        <audio 
+          ref={audioRef}
+          src={previewUrl} 
+          onEnded={handleAudioEnd}
+          hidden
+        />
+      )}
 
       <main className="main-layout">
         {/* Sidebar */}
@@ -351,14 +390,25 @@ export default function Home() {
                             <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{file.name}</div>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>{(file.size/1024).toFixed(1)} KB</div>
                             
-                            <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1.5rem' }}>
+                            <div style={{ display: 'flex', gap: '1.2rem', marginTop: '1.5rem' }}>
+                              <motion.button 
+                                whileHover={{ scale: 1.05 }} 
+                                onClick={togglePlay}
+                                style={{ background: isPlaying ? 'rgba(0,242,255,0.2)' : 'var(--primary)', border: 'none', color: isPlaying ? 'var(--primary)' : '#000', padding: '0.6rem 1.2rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', fontFamily: 'var(--font-orbitron)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                              >
+                                {isPlaying ? <Square size={14} fill="currentColor" /> : <ChevronRight size={18} fill="currentColor" />}
+                                {isPlaying ? 'PAUSE' : 'PLAY'}
+                                {isPlaying && <motion.div layoutId="play-glow" className="btn-glow-pulse" style={{ position: 'absolute', inset: 0, borderRadius: '8px', border: '1px solid var(--primary)', pointerEvents: 'none' }} />}
+                              </motion.button>
+                              
                               <motion.button 
                                 whileHover={{ scale: 1.05 }} 
                                 onClick={() => fileInputRef.current?.click()}
-                                style={{ background: 'rgba(0,242,255,0.1)', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '0.6rem 1.2rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', fontFamily: 'var(--font-orbitron)' }}
+                                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', color: 'var(--text)', padding: '0.6rem 1.2rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', fontFamily: 'var(--font-orbitron)' }}
                               >
-                                CHANGE FILE
+                                CHANGE
                               </motion.button>
+
                               <motion.button 
                                 whileHover={{ scale: 1.05, color: '#ff4444', borderColor: '#ff4444' }} 
                                 onClick={clearFile}
@@ -575,6 +625,16 @@ export default function Home() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+        .btn-glow-pulse {
+          animation: pulse-border 1.5s infinite;
+        }
+
+        @keyframes pulse-border {
+          0% { box-shadow: 0 0 0 0 rgba(0, 242, 255, 0.4); }
+          70% { box-shadow: 0 0 0 10px rgba(0, 242, 255, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(0, 242, 255, 0); }
+        }
       `}</style>
     </div>
   )
