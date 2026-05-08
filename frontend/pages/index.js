@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import Head from 'next/head'
 import { motion, AnimatePresence } from 'framer-motion'
 import { uploadAudio, healthCheck } from '../utils/api'
 import { 
@@ -307,6 +308,10 @@ export default function Home() {
 
   return (
     <div className="app-wrapper">
+      <Head>
+        <title>Engine Diagnostic AI</title>
+        <link rel="icon" href="/logo.png" />
+      </Head>
       <div className="glow-orb orb-1" />
       <div className="glow-orb orb-2" />
       <div className="grid-overlay" />
@@ -377,8 +382,16 @@ export default function Home() {
             <motion.div className="terminal-grid" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
               <div className="visualizer-panel">
                 <header className="scan-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                  <div>
-                    <h1>Engine Sound Checker</h1>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                    <motion.div 
+                      initial={{ rotate: -10, opacity: 0 }} 
+                      animate={{ rotate: 0, opacity: 1 }}
+                      style={{ width: '60px', height: '60px', background: 'rgba(0,242,255,0.1)', borderRadius: '12px', padding: '5px', border: '1px solid var(--border)' }}
+                    >
+                      <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    </motion.div>
+                    <div>
+                      <h1>Engine Sound Checker</h1>
                     <div className="mobile-hide" style={{ display: 'flex', gap: '1rem', marginTop: '0.8rem', color: 'var(--text-muted)', fontSize: '0.9rem', letterSpacing: '0.12em', fontWeight: '500' }}>
                       <span>[ STATUS: {modelReady ? 'WORKING' : 'OFFLINE'} ]</span>
                       <span>[ VERSION: 2.1.0 ]</span>
@@ -669,6 +682,66 @@ export default function Home() {
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+
+        /* Mobile Responsiveness */
+        html, body {
+          max-width: 100vw;
+          overflow-x: hidden;
+        }
+
+        @media (max-width: 768px) {
+          .terminal-grid {
+            display: flex !important;
+            flex-direction: column;
+            overflow-x: hidden;
+          }
+          
+          .visualizer-hero {
+            padding: 1.5rem !important;
+            min-height: auto !important;
+          }
+
+          .scan-header {
+            flex-direction: column;
+            align-items: flex-start !important;
+            gap: 1.5rem;
+          }
+
+          .mobile-hide {
+            display: none !important;
+          }
+          
+          .sidebar {
+            width: 100% !important;
+            height: 60px !important;
+            position: fixed !important;
+            bottom: 0 !important;
+            top: auto !important;
+            left: 0 !important;
+            flex-direction: row !important;
+            z-index: 1000;
+            background: rgba(10, 10, 15, 0.95);
+            backdrop-filter: blur(10px);
+            border-right: none !important;
+            border-top: 1px solid var(--border);
+          }
+
+          .sidebar-icons {
+            flex-direction: row !important;
+            justify-content: space-around !important;
+            width: 100%;
+            padding: 0 !important;
+          }
+
+          .content-body {
+            padding-bottom: 80px !important;
+            overflow-x: auto;
+          }
+          
+          .control-card {
+            min-width: 0 !important;
+          }
         }
       `}</style>
     </div>
