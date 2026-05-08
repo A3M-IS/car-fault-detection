@@ -11,3 +11,5 @@ pandas
 matplotlib
 seaborn
 soundfile
+resampy
+scipy
